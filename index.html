@@ -2,48 +2,64 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Attendance & Payment Tracker</title>
+  <title>Teacher Attendance & Payment Tracker</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 20px; }
-    nav { margin-bottom: 20px; }
-    nav button { margin-right: 10px; }
+    .tabs { margin-bottom: 20px; }
+    .tab-btn {
+      padding: 10px 20px; margin-right: 10px; cursor: pointer;
+      border: none; border-radius: 5px; background: #eee;
+    }
+    .tab-btn.active { background: #4285F4; color: #fff; }
     .tab { display: none; }
-    .active { display: block; }
+    .tab.active { display: block; }
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+    th { background: #f4f4f4; }
   </style>
 </head>
 <body>
-  <h1>Attendance & Payment Tracker</h1>
-  
-  <nav>
-    <button onclick="showTab('attendance')">Attendance</button>
-    <button onclick="showTab('payments')">Payments</button>
-  </nav>
-  
-  <!-- Attendance Tab -->
-  <div id="attendance" class="tab active">
-    <h2>Attendance</h2>
-    <input type="date" id="attendanceDate">
-    <button onclick="addAttendance()">Add Attendance</button>
-    <ul id="attendanceList"></ul>
-  </div>
-  
-  <!-- Payments Tab -->
-  <div id="payments" class="tab">
-    <h2>Payments</h2>
-    <input type="date" id="paymentDate">
-    <input type="number" id="paymentAmount" placeholder="Amount">
-    <button onclick="addPayment()">Add Payment</button>
-    <ul id="paymentList"></ul>
+  <h2>Teacher Attendance & Payment Tracker</h2>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="showTab('attendance')">Attendance</button>
+    <button class="tab-btn" onclick="showTab('payments')">Payments</button>
   </div>
 
-  <!-- Firebase SDK -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js"></script>
+  <!-- Attendance Tab -->
+  <div id="attendance" class="tab active">
+    <h3>Record Attendance</h3>
+    <button onclick="addAttendance()">Add Class (−$40)</button>
+    <table id="attendanceTable">
+      <thead>
+        <tr><th>Date</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <!-- Payments Tab -->
+  <div id="payments" class="tab">
+    <h3>Record Payment</h3>
+    <input type="number" id="paymentAmount" placeholder="Enter amount" />
+    <button onclick="addPayment()">Add Payment</button>
+    <h4>Balance: $<span id="balance">0</span></h4>
+    <table id="paymentsTable">
+      <thead>
+        <tr><th>Date</th><th>Amount</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"></script>
 
   <script>
 // Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
+  import { initializeApp } from "firebase/app";
+  import { getAnalytics } from "firebase/analytics";
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
 
@@ -62,61 +78,53 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const analytics = getAnalytics(app);
-    
 
-    // --- Tab switching ---
+    // Tab switching
     function showTab(tabId) {
-      document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       document.getElementById(tabId).classList.add('active');
+      document.querySelector(`.tab-btn[onclick="showTab('${tabId}')"]`).classList.add('active');
     }
 
-    // --- Attendance ---
+    // Add Attendance
     async function addAttendance() {
-      const date = document.getElementById('attendanceDate').value;
-      if (!date) return alert("Please select a date");
-      await db.collection("attendance").add({ date });
-      loadAttendance();
+      const today = new Date().toLocaleDateString();
+      await db.collection("attendance").add({ date: today });
+      await db.collection("payments").add({ date: today, amount: -40 });
     }
 
-    async function loadAttendance() {
-      const list = document.getElementById('attendanceList');
-      list.innerHTML = "";
-      const snapshot = await db.collection("attendance").orderBy("date").get();
-      snapshot.forEach(doc => {
-        const li = document.createElement("li");
-        li.textContent = doc.data().date + " (−$40)";
-        list.appendChild(li);
-      });
-    }
-
-    // --- Payments ---
+    // Add Payment
     async function addPayment() {
-      const date = document.getElementById('paymentDate').value;
-      const amount = parseFloat(document.getElementById('paymentAmount').value);
-      if (!date || !amount) return alert("Enter date and amount");
-      await db.collection("payments").add({ date, amount });
-      loadPayments();
+      const amt = parseFloat(document.getElementById("paymentAmount").value);
+      if (!amt) return alert("Enter valid amount");
+      const today = new Date().toLocaleDateString();
+      await db.collection("payments").add({ date: today, amount: amt });
+      document.getElementById("paymentAmount").value = "";
     }
 
-    async function loadPayments() {
-      const list = document.getElementById('paymentList');
-      list.innerHTML = "";
-      const snapshot = await db.collection("payments").orderBy("date").get();
+    // Load Attendance
+    db.collection("attendance").orderBy("date").onSnapshot(snapshot => {
+      const tbody = document.querySelector("#attendanceTable tbody");
+      tbody.innerHTML = "";
       snapshot.forEach(doc => {
-        const data = doc.data();
-        const li = document.createElement("li");
-        li.textContent = data.date + ": $" + data.amount;
-        list.appendChild(li);
+        const row = `<tr><td>${doc.data().date}</td></tr>`;
+        tbody.innerHTML += row;
       });
-    }
+    });
 
-    // --- Initial load ---
-    loadAttendance();
-    loadPayments();
+    // Load Payments + Balance
+    db.collection("payments").orderBy("date").onSnapshot(snapshot => {
+      const tbody = document.querySelector("#paymentsTable tbody");
+      tbody.innerHTML = "";
+      let balance = 0;
+      snapshot.forEach(doc => {
+        const d = doc.data();
+        tbody.innerHTML += `<tr><td>${d.date}</td><td>${d.amount}</td></tr>`;
+        balance += d.amount;
+      });
+      document.getElementById("balance").textContent = balance;
+    });
   </script>
 </body>
 </html>
-
-
-
- 
