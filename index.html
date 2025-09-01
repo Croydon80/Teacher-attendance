@@ -2,59 +2,55 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Teacher Attendance & Payment Tracker</title>
+  <title>Teacher Attendance & Payments</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 20px; }
     .tabs { margin-bottom: 20px; }
-    .tab-btn {
-      padding: 10px 20px; margin-right: 10px; cursor: pointer;
-      border: none; border-radius: 5px; background: #eee;
-    }
-    .tab-btn.active { background: #4285F4; color: #fff; }
+    button { margin: 5px; padding: 8px 12px; }
     .tab { display: none; }
     .tab.active { display: block; }
-    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-    th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
-    th { background: #f4f4f4; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
   </style>
 </head>
 <body>
-  <h2>Teacher Attendance & Payment Tracker</h2>
+  <h1>Teacher Attendance & Payments</h1>
 
   <div class="tabs">
-    <button class="tab-btn active" onclick="showTab('attendance')">Attendance</button>
-    <button class="tab-btn" onclick="showTab('payments')">Payments</button>
+    <button onclick="showTab('attendance')">Attendance</button>
+    <button onclick="showTab('payments')">Payments</button>
   </div>
 
   <!-- Attendance Tab -->
   <div id="attendance" class="tab active">
-    <h3>Record Attendance</h3>
-    <button onclick="addAttendance()">Add Class (−$40)</button>
-    <table id="attendanceTable">
+    <h2>Attendance</h2>
+    <button onclick="addAttendance()">Add Attendance</button>
+    <table>
       <thead>
-        <tr><th>Date</th></tr>
+        <tr><th>Date</th><th>Charge</th></tr>
       </thead>
-      <tbody></tbody>
+      <tbody id="attendance-list"></tbody>
     </table>
   </div>
 
   <!-- Payments Tab -->
   <div id="payments" class="tab">
-    <h3>Record Payment</h3>
-    <input type="number" id="paymentAmount" placeholder="Enter amount" />
+    <h2>Payments</h2>
+    <input type="number" id="payment-amount" placeholder="Enter payment amount" />
     <button onclick="addPayment()">Add Payment</button>
-    <h4>Balance: $<span id="balance">0</span></h4>
-    <table id="paymentsTable">
+    <table>
       <thead>
         <tr><th>Date</th><th>Amount</th></tr>
       </thead>
-      <tbody></tbody>
+      <tbody id="payment-list"></tbody>
     </table>
   </div>
 
-  <!-- Firebase SDKs -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"></script>
+  <h3>Balance: $<span id="balance">0</span></h3>
+
+  <!-- Firebase App (CDN) -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
 
   <script>
 // Import the functions you need from the SDKs you need
@@ -77,54 +73,65 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+const analytics = getAnalytics(app);D"
+    };
 
-    // Tab switching
-    function showTab(tabId) {
-      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      document.getElementById(tabId).classList.add('active');
-      document.querySelector(`.tab-btn[onclick="showTab('${tabId}')"]`).classList.add('active');
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    // UI Tab switcher
+    function showTab(tab) {
+      document.querySelectorAll('.tab').forEach(div => div.classList.remove('active'));
+      document.getElementById(tab).classList.add('active');
     }
 
-    // Add Attendance
+    // Add attendance (deducts $40)
     async function addAttendance() {
-      const today = new Date().toLocaleDateString();
-      await db.collection("attendance").add({ date: today });
-      await db.collection("payments").add({ date: today, amount: -40 });
+      const today = new Date().toISOString().split('T')[0];
+      await db.collection("attendance").add({ date: today, charge: 40 });
     }
 
-    // Add Payment
+    // Add payment
     async function addPayment() {
-      const amt = parseFloat(document.getElementById("paymentAmount").value);
-      if (!amt) return alert("Enter valid amount");
-      const today = new Date().toLocaleDateString();
-      await db.collection("payments").add({ date: today, amount: amt });
-      document.getElementById("paymentAmount").value = "";
+      const amount = parseFloat(document.getElementById("payment-amount").value);
+      if (!amount) return;
+      const today = new Date().toISOString().split('T')[0];
+      await db.collection("payments").add({ date: today, amount: amount });
+      document.getElementById("payment-amount").value = "";
     }
 
-    // Load Attendance
+    // Listen to Firestore changes
     db.collection("attendance").orderBy("date").onSnapshot(snapshot => {
-      const tbody = document.querySelector("#attendanceTable tbody");
-      tbody.innerHTML = "";
+      const list = document.getElementById("attendance-list");
+      list.innerHTML = "";
       snapshot.forEach(doc => {
-        const row = `<tr><td>${doc.data().date}</td></tr>`;
-        tbody.innerHTML += row;
+        const data = doc.data();
+        list.innerHTML += `<tr><td>${data.date}</td><td>$${data.charge}</td></tr>`;
       });
+      updateBalance();
     });
 
-    // Load Payments + Balance
     db.collection("payments").orderBy("date").onSnapshot(snapshot => {
-      const tbody = document.querySelector("#paymentsTable tbody");
-      tbody.innerHTML = "";
-      let balance = 0;
+      const list = document.getElementById("payment-list");
+      list.innerHTML = "";
       snapshot.forEach(doc => {
-        const d = doc.data();
-        tbody.innerHTML += `<tr><td>${d.date}</td><td>${d.amount}</td></tr>`;
-        balance += d.amount;
+        const data = doc.data();
+        list.innerHTML += `<tr><td>${data.date}</td><td>$${data.amount}</td></tr>`;
       });
-      document.getElementById("balance").textContent = balance;
+      updateBalance();
     });
+
+    async function updateBalance() {
+      const attendances = await db.collection("attendance").get();
+      const payments = await db.collection("payments").get();
+
+      let totalCharges = 0;
+      attendances.forEach(doc => totalCharges += doc.data().charge);
+      let totalPayments = 0;
+      payments.forEach(doc => totalPayments += doc.data().amount);
+
+      document.getElementById("balance").textContent = totalPayments - totalCharges;
+    }
   </script>
 </body>
 </html>
